@@ -118,6 +118,7 @@ start_rabbitmq_server() {
         -sasl sasl_error_logger "$SASL_ERROR_LOGGER" \
         -rabbit error_logger "$RABBIT_ERROR_LOGGER" \
         -rabbit sasl_error_logger "$RABBIT_SASL_ERROR_LOGGER" \
+        -rabbit log_base "\"$RABBITMQ_LOG_BASE\"" \
         -rabbit enabled_plugins_file "\"$RABBITMQ_ENABLED_PLUGINS_FILE\"" \
         -rabbit plugins_dir "\"$RABBITMQ_PLUGINS_DIR\"" \
         -rabbit plugins_expand_dir "\"$RABBITMQ_PLUGINS_EXPAND_DIR\"" \

@@ -53,12 +53,20 @@ log(Category, Level, Fmt, Args) when is_list(Args) ->
     case level(Level) =< catlevel(Category) of
         false -> ok;
         true  -> F = case Level of
-                         debug   -> fun error_logger:info_msg/2;
+                         debug   -> fun debug_msg/2;
                          info    -> fun error_logger:info_msg/2;
                          warning -> fun error_logger:warning_msg/2;
                          error   -> fun error_logger:error_msg/2
                      end,
                  with_local_io(fun () -> F(Fmt, Args) end)
+    end.
+
+debug_msg(Fmt, Args) ->
+    RunningApps = proplists:get_value(running, application:info(), []),
+    LagerApp = proplists:get_value(lager, RunningApps, undefined),
+    case LagerApp of
+        undefined -> error_logger:info_msg(Fmt, Args);
+        _ -> lager:log(debug, self(), Fmt, Args)
     end.
 
 debug(Fmt)         -> log(default, debug,    Fmt).

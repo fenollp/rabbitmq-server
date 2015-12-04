@@ -662,6 +662,7 @@ insert_default_data() ->
 %% logging
 
 ensure_working_log_handlers() ->
+    start_lager(),
     Handlers = gen_event:which_handlers(error_logger),
     ok = ensure_working_log_handler(error_logger_tty_h,
                                     rabbit_error_logger_file_h,
@@ -675,6 +676,24 @@ ensure_working_log_handlers() ->
                                     log_location(sasl),
                                     Handlers),
     ok.
+
+start_lager() ->
+  application:load(lager),
+  case application:get_env(lager, log_root) of
+      undefined -> 
+          application:set_env(lager, log_root, 
+              application:get_env(rabbit, log_base, undefined));
+      _ -> ok
+  end,
+  case application:get_env(lager, handlers) of
+      undefined ->
+          application:set_env(lager, handlers,
+              [{lager_file_backend, 
+                  [{file, string:sub_word(atom_to_list(node()), 1, $@) ++ ".log"}, 
+                   {level, debug}]}]);
+      _ -> ok
+  end,
+  lager:start().
 
 ensure_working_log_handler(OldHandler, NewHandler, TTYHandler,
                            LogLocation, Handlers) ->

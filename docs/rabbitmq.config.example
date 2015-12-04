@@ -621,5 +621,15 @@
    %% Set queries to determine which tags a user has
    %%
    %% {tag_queries, []}
+  ]},
+  {lager, [
+   %% Lager application config to control logs.
+   %% See https://github.com/basho/lager for more documentation
+   %% Log direcrory. Loads authomaticaly from RABBITMQ_LOG_BASE variable.
+   %% {log_root, "RABBITMQ_LOG_BASE"},
+   %% Log handlers. By default use file handler "rabbitmq.log"
+   %% {handlers, [
+   %%   {lager_file_backend, [{file, "rabbitmq.log"}, {level, debug}]}
+   %% ]}
   ]}
 ].
