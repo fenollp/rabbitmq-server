@@ -678,22 +678,25 @@ ensure_working_log_handlers() ->
     ok.
 
 start_lager() ->
-  application:load(lager),
-  case application:get_env(lager, log_root) of
-      undefined -> 
-          application:set_env(lager, log_root, 
-              application:get_env(rabbit, log_base, undefined));
-      _ -> ok
-  end,
-  case application:get_env(lager, handlers) of
-      undefined ->
-          application:set_env(lager, handlers,
-              [{lager_file_backend, 
-                  [{file, string:sub_word(atom_to_list(node()), 1, $@) ++ ".log"}, 
-                   {level, debug}]}]);
-      _ -> ok
-  end,
-  lager:start().
+  case proplists:get_value(lager, application:loaded_applications(), no_lager) of
+      no_lager -> ok;
+      _ ->
+          case application:get_env(lager, log_root) of
+              undefined -> 
+                  application:set_env(lager, log_root, 
+                      application:get_env(rabbit, log_base, undefined));
+              _ -> ok
+          end,
+          case application:get_env(lager, handlers) of
+              undefined ->
+                  application:set_env(lager, handlers,
+                      [{lager_file_backend, 
+                          [{file, string:sub_word(atom_to_list(node()), 1, $@) ++ ".log"}, 
+                           {level, debug}]}]);
+              _ -> ok
+          end,
+          lager:start()
+  end.
 
 ensure_working_log_handler(OldHandler, NewHandler, TTYHandler,
                            LogLocation, Handlers) ->
