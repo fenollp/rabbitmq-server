@@ -678,8 +678,10 @@ ensure_working_log_handlers() ->
     ok.
 
 start_lager() ->
-  case proplists:get_value(lager, application:loaded_applications(), no_lager) of
-      no_lager -> ok;
+  application:load(lager),
+  case lists:keyfind(lager, 1, application:loaded_applications()) of
+      false -> 
+          ok;
       _ ->
           case application:get_env(lager, log_root) of
               undefined -> 
