@@ -353,7 +353,7 @@ start() ->
                      %% restarting the app.
                      ok = ensure_application_loaded(),
                      HipeResult = maybe_hipe_compile(),
-                     ok = ensure_working_log_handlers(),
+                     ok = start_logger(),
                      log_hipe_result(HipeResult),
                      rabbit_node_monitor:prepare_cluster_status_files(),
                      rabbit_mnesia:check_cluster_consistency(),
@@ -364,7 +364,7 @@ boot() ->
     start_it(fun() ->
                      ok = ensure_application_loaded(),
                      HipeResult = maybe_hipe_compile(),
-                     ok = ensure_working_log_handlers(),
+                     ok = start_logger(),
                      log_hipe_result(HipeResult),
                      rabbit_node_monitor:prepare_cluster_status_files(),
                      ok = rabbit_upgrade:maybe_upgrade_mnesia(),
@@ -661,44 +661,25 @@ insert_default_data() ->
 %%---------------------------------------------------------------------------
 %% logging
 
-ensure_working_log_handlers() ->
-    start_lager(),
-    Handlers = gen_event:which_handlers(error_logger),
-    ok = ensure_working_log_handler(error_logger_tty_h,
-                                    rabbit_error_logger_file_h,
-                                    error_logger_tty_h,
-                                    log_location(kernel),
-                                    Handlers),
-
-    ok = ensure_working_log_handler(sasl_report_tty_h,
-                                    rabbit_sasl_report_file_h,
-                                    sasl_report_tty_h,
-                                    log_location(sasl),
-                                    Handlers),
-    ok.
-
-start_lager() ->
+start_logger() ->
   application:load(lager),
-  case lists:keyfind(lager, 1, application:loaded_applications()) of
-      false -> 
-          ok;
-      _ ->
-          case application:get_env(lager, log_root) of
-              undefined -> 
-                  application:set_env(lager, log_root, 
-                      application:get_env(rabbit, log_base, undefined));
-              _ -> ok
-          end,
-          case application:get_env(lager, handlers) of
-              undefined ->
-                  application:set_env(lager, handlers,
-                      [{lager_file_backend, 
-                          [{file, string:sub_word(atom_to_list(node()), 1, $@) ++ ".log"}, 
-                           {level, debug}]}]);
-              _ -> ok
-          end,
-          lager:start()
-  end.
+  case application:get_env(lager, log_root) of
+      undefined -> 
+          application:set_env(lager, log_root, 
+              application:get_env(rabbit, log_base, undefined));
+      _ -> ok
+  end,
+  case application:get_env(lager, handlers) of
+      undefined ->
+          application:set_env(lager, handlers,
+              [{lager_file_backend, 
+                  [{file, string:sub_word(atom_to_list(node()), 1, $@) ++ ".log"}, 
+                   {level, debug}]}]);
+      _ -> ok
+  end,
+  lager:start(),
+  rabbit_log:info("Lager found. Using lager for logs"),
+  ok.
 
 ensure_working_log_handler(OldHandler, NewHandler, TTYHandler,
                            LogLocation, Handlers) ->
@@ -765,15 +746,12 @@ force_event_refresh(Ref) ->
 %% misc
 
 log_broker_started(Plugins) ->
-    rabbit_log:with_local_io(
-      fun() ->
-              PluginList = iolist_to_binary([rabbit_misc:format(" * ~s~n", [P])
-                                             || P <- Plugins]),
-              rabbit_log:info(
-                "Server startup complete; ~b plugins started.~n~s",
-                [length(Plugins), PluginList]),
-              io:format(" completed with ~p plugins.~n", [length(Plugins)])
-      end).
+    PluginList = iolist_to_binary([rabbit_misc:format(" * ~s~n", [P])
+                                   || P <- Plugins]),
+    rabbit_log:info(
+      "Server startup complete; ~b plugins started.~n~s",
+      [length(Plugins), PluginList]),
+    io:format(" completed with ~p plugins.~n", [length(Plugins)]).
 
 erts_version_check() ->
     ERTSVer = erlang:system_info(version),
