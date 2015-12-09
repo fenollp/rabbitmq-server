@@ -537,15 +537,51 @@ environment(App) ->
     lists:keysort(1, [P || P = {K, _} <- application:get_all_env(App),
                            not lists:member(K, Ignore)]).
 
+
 rotate_logs(BinarySuffix) ->
+    rabbit_log:info("Rotating logs with suffix '~s'~n", [BinarySuffix]),
     Suffix = binary_to_list(BinarySuffix),
-    rabbit_log:info("Rotating logs with suffix '~s'~n", [Suffix]),
-    log_rotation_result(rotate_logs(log_location(kernel),
-                                    Suffix,
-                                    rabbit_error_logger_file_h),
-                        rotate_logs(log_location(sasl),
-                                    Suffix,
-                                    rabbit_sasl_report_file_h)).
+    ok = rotate_lager_handlers(Suffix, application:get_env(lager, handlers)),
+    ok = rotate_lager_sinks(Suffix),
+    rabbit_log:info("New log after rotation."),
+    error_logger:info_msg("New log after rotation.").
+
+rotate_lager_handlers(_Suffix, undefined) -> 
+    error_logger:error_msg("Cannot rotate logs. No lager handlers defined."),
+    ok;
+rotate_lager_handlers(Suffix, {ok, Handlers}) -> 
+    rotate_lager_handlers(Suffix, Handlers);
+rotate_lager_handlers(Suffix, Handlers) -> 
+    lists:foreach(
+        fun({lager_file_backend, Settings}) ->
+            {file, File} = proplists:lookup(file, Settings),
+            {ok, Dir} = application:get_env(lager, log_root),
+            FileName = filename:join(Dir, File),
+            case Suffix of
+                [] -> 
+                    file:delete(FileName);
+                _ -> 
+                    NextFile = FileName ++ Suffix,
+                    file:rename(FileName, NextFile)
+            end;
+           (_) -> ok
+        end,
+        Handlers).
+
+rotate_lager_sinks(Suffix) -> 
+    case application:get_env(lager, extra_sinks) of
+        undefined -> 
+            error_logger:error_msg(
+              "Cannot rotate logs. No lager extra_sinks defined."),
+            ok;
+        {ok, Sinks} ->
+            lists:foreach(
+              fun({_, Sink}) -> 
+                  rotate_lager_handlers(Suffix, 
+                                        proplists:get_value(handlers, Sink))
+              end,
+              Sinks)
+    end.
 
 %%--------------------------------------------------------------------
 
@@ -671,37 +707,32 @@ start_logger() ->
   end,
   case application:get_env(lager, handlers) of
       undefined ->
-          application:set_env(lager, handlers,
-              [{lager_file_backend, 
-                  [{file, string:sub_word(atom_to_list(node()), 1, $@) ++ ".log"}, 
-                   {level, debug}]}]);
+          DefaultHandlers = lager_handlers(application:get_env(rabbit, 
+                                                               error_logger, 
+                                                               tty)),
+          SaslHandlers = lager_handlers(application:get_env(rabbit, 
+                                                            sasl_error_logger, 
+                                                            tty)),
+          Sinks = [
+              {rabbitmq_lager_event, [{handlers, DefaultHandlers}]}
+               % TODO Waiting for PR https://github.com/basho/lager/pull/303
+               % ,{error_logger_lager_event, [{handlers, SaslHandlers}]}
+              ],
+              Handlers = SaslHandlers,
+          application:set_env(lager, handlers, Handlers),
+          application:set_env(lager, extra_sinks, Sinks);
       _ -> ok
   end,
   lager:start(),
   rabbit_log:info("Lager found. Using lager for logs"),
   ok.
 
-ensure_working_log_handler(OldHandler, NewHandler, TTYHandler,
-                           LogLocation, Handlers) ->
-    case LogLocation of
-        undefined -> ok;
-        tty       -> case lists:member(TTYHandler, Handlers) of
-                         true  -> ok;
-                         false ->
-                             throw({error, {cannot_log_to_tty,
-                                            TTYHandler, not_installed}})
-                     end;
-        _         -> case lists:member(NewHandler, Handlers) of
-                         true  -> ok;
-                         false -> case rotate_logs(LogLocation, "",
-                                                   OldHandler, NewHandler) of
-                                      ok -> ok;
-                                      {error, Reason} ->
-                                          throw({error, {cannot_log_to_file,
-                                                         LogLocation, Reason}})
-                                  end
-                     end
-    end.
+
+lager_handlers(tty) ->
+  [{lager_console_backend, debug}];
+lager_handlers({file, FileName}) ->
+  [{lager_file_backend, [
+    {file, FileName}, {level, debug}, {date, ""}, {size, 0}]}].
 
 log_location(Type) ->
     case application:get_env(rabbit, case Type of
@@ -715,26 +746,6 @@ log_location(Type) ->
         {ok, Bad}          -> throw({error, {cannot_log_to_file, Bad}});
         _                  -> undefined
     end.
-
-rotate_logs(File, Suffix, Handler) ->
-    rotate_logs(File, Suffix, Handler, Handler).
-
-rotate_logs(undefined, _Suffix, _OldHandler, _NewHandler) -> ok;
-rotate_logs(tty,       _Suffix, _OldHandler, _NewHandler) -> ok;
-rotate_logs(File,       Suffix,  OldHandler,  NewHandler) ->
-    gen_event:swap_handler(error_logger,
-                           {OldHandler, swap},
-                           {NewHandler, {File, Suffix}}).
-
-log_rotation_result({error, MainLogError}, {error, SaslLogError}) ->
-    {error, {{cannot_rotate_main_logs, MainLogError},
-             {cannot_rotate_sasl_logs, SaslLogError}}};
-log_rotation_result({error, MainLogError}, ok) ->
-    {error, {cannot_rotate_main_logs, MainLogError}};
-log_rotation_result(ok, {error, SaslLogError}) ->
-    {error, {cannot_rotate_sasl_logs, SaslLogError}};
-log_rotation_result(ok, ok) ->
-    ok.
 
 force_event_refresh(Ref) ->
     rabbit_direct:force_event_refresh(Ref),
