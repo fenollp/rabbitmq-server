@@ -26,6 +26,12 @@
 -export([start_apps/1, stop_apps/1]).
 -export([log_location/1, config_files/0]). %% for testing and mgmt-agent
 
+-ifdef(TEST).
+
+-export([start_logger/0]).
+
+-endif.
+
 %%---------------------------------------------------------------------------
 %% Boot steps.
 -export([maybe_insert_default_data/0, boot_delegate/0, recover/0]).
@@ -551,7 +557,7 @@ rotate_lager_handlers(_Suffix, undefined) ->
     ok;
 rotate_lager_handlers(Suffix, {ok, Handlers}) -> 
     rotate_lager_handlers(Suffix, Handlers);
-rotate_lager_handlers(Suffix, Handlers) -> 
+rotate_lager_handlers(Suffix, Handlers) when is_list(Handlers) -> 
     lists:foreach(
         fun({lager_file_backend, Settings}) ->
             {file, File} = proplists:lookup(file, Settings),
@@ -698,6 +704,7 @@ insert_default_data() ->
 %% logging
 
 start_logger() ->
+  application:stop(lager),
   application:load(lager),
   case application:get_env(lager, log_root) of
       undefined -> 
