@@ -706,31 +706,7 @@ insert_default_data() ->
 
 start_logger() ->
   application:stop(lager),
-  application:load(lager),
-  case application:get_env(lager, log_root) of
-      undefined -> 
-          application:set_env(lager, log_root, 
-              application:get_env(rabbit, log_base, undefined));
-      _ -> ok
-  end,
-  case application:get_env(lager, handlers) of
-      undefined ->
-          DefaultHandlers = lager_handlers(application:get_env(rabbit, 
-                                                               error_logger, 
-                                                               tty)),
-          SaslHandlers = lager_handlers(application:get_env(rabbit, 
-                                                            sasl_error_logger, 
-                                                            tty)),
-          Sinks = [
-              {rabbitmq_lager_event, [{handlers, DefaultHandlers}]}
-               % TODO Waiting for PR https://github.com/basho/lager/pull/303
-               % ,{error_logger_lager_event, [{handlers, SaslHandlers}]}
-              ],
-              Handlers = SaslHandlers,
-          application:set_env(lager, handlers, Handlers),
-          application:set_env(lager, extra_sinks, Sinks);
-      _ -> ok
-  end,
+  ensure_lager_configured(),
   lager:start(),
   rabbit_log:info("Lager found. Using lager for logs"),
   error_logger:info_msg("Lager found. Using lager for sasl logs"),
@@ -784,28 +760,58 @@ lager_handlers({file, FileName}) ->
     {file, FileName}, {level, debug}, {date, ""}, {size, 0}]}].
 
 
+ensure_lager_configured() ->
+    case lager_configured() of
+        false -> configure_lager();
+        true -> ok
+    end.
+
+% Lager should have handlers or sinks
+lager_configured() ->
+    application:get_env(lager, handlers) =/= undefined
+    andalso
+    application:get_env(lager, extra_sinks) =/= undefined.
+
+configure_lager() ->
+    application:load(lager),
+    case application:get_env(lager, log_root) of
+        undefined -> 
+            application:set_env(lager, log_root, 
+                application:get_env(rabbit, log_base, undefined));
+        _ -> ok
+    end,
+    case application:get_env(lager, handlers) of
+        undefined ->
+            DefaultHandlers = lager_handlers(application:get_env(rabbit, 
+                                                                 error_logger, 
+                                                                 tty)),
+            SaslHandlers = lager_handlers(application:get_env(rabbit, 
+                                                              sasl_error_logger, 
+                                                              tty)),
+            Sinks = [
+                {rabbitmq_lager_event, [{handlers, DefaultHandlers}]}
+                 % TODO Waiting for PR https://github.com/basho/lager/pull/303
+                 % ,{error_logger_lager_event, [{handlers, SaslHandlers}]}
+                ],
+                Handlers = SaslHandlers,
+            application:set_env(lager, handlers, Handlers),
+            application:set_env(lager, extra_sinks, Sinks);
+        _ -> ok
+    end.
+
 log_location(Type) ->
+    ensure_lager_configured(),
     LagerHandlers = case Type of 
         kernel ->
             proplists:get_value(handlers, 
                 proplists:get_value(rabbitmq_lager_event, 
-                    application:get_env(lager, extra_sinks, [])), []);
+                    application:get_env(lager, extra_sinks, [])));
         sasl ->
             application:get_env(lager, handlers, undefined)
     end,
     case LagerHandlers of
         undefined -> 
-            case application:get_env(rabbit, case Type of
-                                                 kernel -> error_logger;
-                                                 sasl -> sasl_error_logger
-                                             end) of
-                {ok, {file, File}} -> File;
-                {ok, false}        -> undefined;
-                {ok, tty}          -> tty;
-                {ok, silent}       -> undefined;
-                {ok, Bad}          -> throw({error, {cannot_log_to_file, Bad}});
-                _                  -> undefined
-            end; 
+            throw({error, {cannot_log, lager_handlers_undefined, Type}, application:get_env(rabbit, sasl_error_logger)});
         _ ->
             case proplists:get_value(lager_file_backend, LagerHandlers) of
                 undefined -> 
