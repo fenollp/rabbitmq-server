@@ -739,18 +739,31 @@ start_logger() ->
 
 ensure_log_working() ->
     {ok, Dir} = application:get_env(lager, log_root),
-    case application:get_env(rabbit, error_logger, tty) of
-      {file, FileName} ->
-          ensure_logfile_exist(Dir, FileName);
-      _ -> 
-        ok
-    end,
-    case application:get_env(rabbit, sasl_error_logger, tty) of
-      {file, SaslFileName} ->
-          ensure_logfile_exist(Dir, SaslFileName);
-      _ -> ok
+    {ok, Handlers} = application:get_env(lager, handlers),
+    Sinks = application:get_env(lager, extra_sinks, []),
+    [ ensure_lager_handler_file_exist(Dir, Handler)
+      || Handler <- Handlers ],
+    case proplists:get_value(rabbitmq_lager_event, Sinks) of
+        undefined -> throw({error, 
+            {cannot_log, rabbitmq_lager_event_sink_undefined}});
+        Sink ->
+            SinkHandlers = proplists:get_value(handlers, Sink, []),
+            [ ensure_lager_handler_file_exist(Dir, Handler)
+              || Handler <- SinkHandlers ]
     end.
 
+ensure_lager_handler_file_exist(Dir, {lager_file_backend, Settings}) ->
+    FileName = lager_file_name(Settings),
+    ensure_logfile_exist(Dir, FileName);
+ensure_lager_handler_file_exist(_Dir, _) -> ok.
+
+lager_file_name(Settings) when is_list(Settings) ->
+    {file, FileName} = proplists:lookup(file, Settings),
+    FileName;
+lager_file_name({FileName, _}) -> FileName;
+lager_file_name({FileName, _, _, _, _}) -> FileName;
+lager_file_name(_) -> 
+    throw({error, {cannot_log, lager_file_backend_config_invalid}}).
 
 
 ensure_logfile_exist(Dir, FileName) ->
@@ -770,17 +783,40 @@ lager_handlers({file, FileName}) ->
   [{lager_file_backend, [
     {file, FileName}, {level, debug}, {date, ""}, {size, 0}]}].
 
+
 log_location(Type) ->
-    case application:get_env(rabbit, case Type of
-                                         kernel -> error_logger;
-                                         sasl   -> sasl_error_logger
-                                     end) of
-        {ok, {file, File}} -> File;
-        {ok, false}        -> undefined;
-        {ok, tty}          -> tty;
-        {ok, silent}       -> undefined;
-        {ok, Bad}          -> throw({error, {cannot_log_to_file, Bad}});
-        _                  -> undefined
+    LagerHandlers = case Type of 
+        kernel ->
+            proplists:get_value(handlers, 
+                proplists:get_value(rabbitmq_lager_event, 
+                    application:get_env(lager, extra_sinks, [])), []);
+        sasl ->
+            application:get_env(lager, handlers, undefined)
+    end,
+    case LagerHandlers of
+        undefined -> 
+            case application:get_env(rabbit, case Type of
+                                                 kernel -> error_logger;
+                                                 sasl -> sasl_error_logger
+                                             end) of
+                {ok, {file, File}} -> File;
+                {ok, false}        -> undefined;
+                {ok, tty}          -> tty;
+                {ok, silent}       -> undefined;
+                {ok, Bad}          -> throw({error, {cannot_log_to_file, Bad}});
+                _                  -> undefined
+            end; 
+        _ ->
+            case proplists:get_value(lager_file_backend, LagerHandlers) of
+                undefined -> 
+                    case proplists:get_value(lager_console_backend, 
+                                             LagerHandlers) of
+                        undefined -> undefined;
+                        _ -> tty
+                    end;
+                Settings ->
+                    lager_file_name(Settings)
+            end
     end.
 
 force_event_refresh(Ref) ->
