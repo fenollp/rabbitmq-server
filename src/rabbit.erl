@@ -549,8 +549,9 @@ rotate_logs(BinarySuffix) ->
     Suffix = binary_to_list(BinarySuffix),
     ok = rotate_lager_handlers(Suffix, application:get_env(lager, handlers)),
     ok = rotate_lager_sinks(Suffix),
+    timer:sleep(2000),
     rabbit_log:info("New log after rotation."),
-    error_logger:info_msg("New log after rotation.").
+    error_logger:info_msg("New sasl log after rotation.").
 
 rotate_lager_handlers(_Suffix, undefined) -> 
     error_logger:error_msg("Cannot rotate logs. No lager handlers defined."),
@@ -732,12 +733,40 @@ start_logger() ->
   end,
   lager:start(),
   rabbit_log:info("Lager found. Using lager for logs"),
+  error_logger:info_msg("Lager found. Using lager for sasl logs"),
+  ensure_log_working(),
   ok.
 
+ensure_log_working() ->
+    {ok, Dir} = application:get_env(lager, log_root),
+    case application:get_env(rabbit, error_logger, tty) of
+      {file, FileName} ->
+          ensure_logfile_exist(Dir, FileName);
+      _ -> 
+        ok
+    end,
+    case application:get_env(rabbit, sasl_error_logger, tty) of
+      {file, SaslFileName} ->
+          ensure_logfile_exist(Dir, SaslFileName);
+      _ -> ok
+    end.
 
+
+
+ensure_logfile_exist(Dir, FileName) ->
+    LogFile = filename:join(Dir, FileName),
+    case rabbit_file:read_file_info(filename:join(Dir, FileName)) of
+      {ok,_} -> ok;
+      {error, Err} -> throw({error, {cannot_log_to_file, LogFile, Err}})
+    end.
+
+lager_handlers(Silent) when Silent == silent; Silent == false ->
+  [];
 lager_handlers(tty) ->
   [{lager_console_backend, debug}];
 lager_handlers({file, FileName}) ->
+  {ok, Dir} = application:get_env(lager, log_root),
+  rabbit_file:ensure_parent_dirs_exist(filename:join(Dir, FileName)),
   [{lager_file_backend, [
     {file, FileName}, {level, debug}, {date, ""}, {size, 0}]}].
 
