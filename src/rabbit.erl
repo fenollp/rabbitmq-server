@@ -642,6 +642,9 @@ boot_error({could_not_start, rabbit, {{timeout_waiting_for_tables, _}, _}},
     log_boot_error_and_exit(
       timeout_waiting_for_tables,
       Err ++ rabbit_nodes:diagnostics(Nodes) ++ "~n~n", []);
+boot_error({error, {cannot_log_to_file, _, _}} = Reason, Stacktrace) ->
+    Fmt = "Error description:~n   ~p~n~n",
+    boot_error(Reason, Fmt, [Reason], Stacktrace);
 boot_error(Reason, Stacktrace) ->
     Fmt = "Error description:~n   ~p~n~n"
         "Log files (may contain more information):~n   ~s~n   ~s~n~n",
@@ -721,7 +724,7 @@ ensure_log_working() ->
       || Handler <- Handlers ],
     case proplists:get_value(rabbitmq_lager_event, Sinks) of
         undefined -> throw({error, 
-            {cannot_log, rabbitmq_lager_event_sink_undefined}});
+            {cannot_log_to_file, unknown, rabbitmq_lager_event_sink_undefined}});
         Sink ->
             SinkHandlers = proplists:get_value(handlers, Sink, []),
             [ ensure_lager_handler_file_exist(Dir, Handler)
@@ -739,7 +742,7 @@ lager_file_name(Settings) when is_list(Settings) ->
 lager_file_name({FileName, _}) -> FileName;
 lager_file_name({FileName, _, _, _, _}) -> FileName;
 lager_file_name(_) -> 
-    throw({error, {cannot_log, lager_file_backend_config_invalid}}).
+    throw({error, {cannot_log_to_file, unknown, lager_file_backend_config_invalid}}).
 
 
 ensure_logfile_exist(Dir, FileName) ->
@@ -755,7 +758,11 @@ lager_handlers(tty) ->
   [{lager_console_backend, debug}];
 lager_handlers({file, FileName}) ->
   {ok, Dir} = application:get_env(lager, log_root),
-  rabbit_file:ensure_parent_dirs_exist(filename:join(Dir, FileName)),
+  case rabbit_file:ensure_dir(filename:join(Dir, FileName)) of
+    ok -> ok;
+    {error, Reason} ->
+      throw({error, {cannot_log_to_file, FileName, {cannot_create_parent_dirs, FileName, Reason}}})
+  end,
   [{lager_file_backend, [
     {file, FileName}, {level, debug}, {date, ""}, {size, 0}]}].
 
@@ -811,7 +818,7 @@ log_location(Type) ->
     end,
     case LagerHandlers of
         undefined -> 
-            throw({error, {cannot_log, lager_handlers_undefined, Type}, application:get_env(rabbit, sasl_error_logger)});
+            throw({error, {cannot_log_to_file, unknown, {lager_handlers_undefined, Type}}, application:get_env(rabbit, sasl_error_logger)});
         _ ->
             case proplists:get_value(lager_file_backend, LagerHandlers) of
                 undefined -> 
