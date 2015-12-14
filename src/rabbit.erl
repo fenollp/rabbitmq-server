@@ -722,7 +722,7 @@ ensure_log_working() ->
     Sinks = application:get_env(lager, extra_sinks, []),
     [ ensure_lager_handler_file_exist(Dir, Handler)
       || Handler <- Handlers ],
-    case proplists:get_value(rabbitmq_lager_event, Sinks) of
+    case proplists:get_value(?LAGGER_SINK, Sinks) of
         undefined -> throw({error, 
             {cannot_log_to_file, unknown, rabbitmq_lager_event_sink_undefined}});
         Sink ->
@@ -796,7 +796,7 @@ configure_lager() ->
                                                               sasl_error_logger, 
                                                               tty)),
             Sinks = [
-                {rabbitmq_lager_event, [{handlers, DefaultHandlers}]}
+                {?LAGGER_SINK, [{handlers, DefaultHandlers}]}
                  % TODO Waiting for PR https://github.com/basho/lager/pull/303
                  % ,{error_logger_lager_event, [{handlers, SaslHandlers}]}
                 ],
@@ -811,7 +811,7 @@ log_location(Type) ->
     LagerHandlers = case Type of 
         kernel ->
             proplists:get_value(handlers, 
-                proplists:get_value(rabbitmq_lager_event, 
+                proplists:get_value(?LAGGER_SINK, 
                     application:get_env(lager, extra_sinks, [])));
         sasl ->
             application:get_env(lager, handlers, undefined)

@@ -19,8 +19,7 @@
 -export([log/3, log/4, debug/1, debug/2, info/1, info/2, warning/1,
          warning/2, error/1, error/2]).
 
--define(LAGGER_SINK, rabbitmq_lager_event).
-
+-include("rabbit.hrl").
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
