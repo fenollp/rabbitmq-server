@@ -688,6 +688,11 @@ lager_configured() ->
 
 configure_lager() ->
     application:load(lager),
+    % Turn off reformatting for error_logger messages
+    case application:get_env(lager, error_logger_format_raw) of
+        undefined -> application:set_env(lager, error_logger_format_raw, true);
+        _ -> ok
+    end,
     case application:get_env(lager, log_root) of
         undefined -> 
             application:set_env(lager, log_root, 
