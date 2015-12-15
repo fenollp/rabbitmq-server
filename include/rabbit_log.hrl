@@ -1,0 +1,1 @@
+-define(LAGER_SINK, rabbitmq_lager_event).

@@ -19,7 +19,7 @@
 -export([log/3, log/4, debug/1, debug/2, info/1, info/2, warning/1,
          warning/2, error/1, error/2]).
 
--include("rabbit.hrl").
+-include("rabbit_log.hrl").
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
@@ -50,7 +50,7 @@ log(Category, Level, Fmt) -> log(Category, Level, Fmt, []).
 log(Category, Level, Fmt, Args) when is_list(Args) ->
     case level(Level) =< catlevel(Category) of
         false -> ok;
-        true  -> lager:log(?LAGGER_SINK, Level, self(), Fmt, Args)
+        true  -> lager:log(?LAGER_SINK, Level, self(), Fmt, Args)
     end.
 
 debug(Fmt)         -> log(default, debug,    Fmt).
