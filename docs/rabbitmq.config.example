@@ -625,14 +625,14 @@
   {lager, [
    %% Lager application config to control logs.
    %% See https://github.com/basho/lager for more documentation
-   %% Log direcrory. Loads authomaticaly from RABBITMQ_LOG_BASE variable.
+   %% Log direcrory. Loads automatically from RABBITMQ_LOG_BASE variable.
    %% {log_root, "RABBITMQ_LOG_BASE"},
-   %% Sasl error log location is in default handlers.
+   %% SASL error log location is in default handlers.
    %% By default use file handler "rabbitmq.log"
    %% {handlers, [
    %%   {lager_file_backend, [{file, "rabbitmq-sasl.log"}, {level, debug}, {date, ""}, {size, 0}]}
    %% ]},
-   %% Rabbit log should be defined with rabbitmq_lager_event sink
+   %% RabbitMQ log should be defined with rabbitmq_lager_event sink
    %% {extra_sinks, [
    %%   {rabbitmq_lager_event, [{handlers, [{lager_file_backend, [{file, "rabbit.log"}, {level, debug}, {date, ""}, {size, 0}]}]}]}
    %% ]}

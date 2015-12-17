@@ -712,8 +712,7 @@ configure_lager() ->
                  % TODO Waiting for PR https://github.com/basho/lager/pull/303
                  % ,{error_logger_lager_event, [{handlers, SaslHandlers}]}
                 ],
-                Handlers = SaslHandlers,
-            application:set_env(lager, handlers, Handlers),
+            application:set_env(lager, handlers, SaslHandlers),
             application:set_env(lager, extra_sinks, Sinks);
         _ -> ok
     end.
@@ -730,7 +729,9 @@ log_location(Type) ->
     end,
     case LagerHandlers of
         undefined -> 
-            throw({error, {cannot_log_to_file, unknown, {lager_handlers_undefined, Type}}, application:get_env(rabbit, sasl_error_logger)});
+            throw({error, {cannot_log_to_file, unknown, 
+                           {lager_handlers_undefined, Type}}, 
+                   application:get_env(rabbit, sasl_error_logger)});
         _ ->
             case proplists:get_value(lager_file_backend, LagerHandlers) of
                 undefined -> 
