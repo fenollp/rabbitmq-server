@@ -618,8 +618,8 @@ start_logger() ->
   application:stop(lager),
   ensure_lager_configured(),
   lager:start(),
-  rabbit_log:info("Lager found. Using lager for logs"),
-  error_logger:info_msg("Lager found. Using lager for sasl logs"),
+  rabbit_log:info("Using Lager for logs."),
+  error_logger:info_msg("Using Lager for SASL logs."),
   ensure_log_working(),
   ok.
 
