@@ -32,7 +32,7 @@ all: package
 
 package: clean
 	cp -a $(SOURCE_DIST_FILE) $(DEBIAN_ORIG_TARBALL)
-	tar -Jxf $(DEBIAN_ORIG_TARBALL)
+	xzcat $(DEBIAN_ORIG_TARBALL) | tar -xf -
 	cp -a debian $(UNPACKED_DIR)
 	rsync -a \
 		--exclude '.sw?' --exclude '.*.sw?' \
@@ -50,8 +50,8 @@ package: clean
 
 clean:
 	rm -rf $(UNPACKED_DIR)
-	rm -f $(PACKAGENAME)_*.tar.gz
-	rm -f $(PACKAGENAME)_*.diff.gz
+	rm -f $(DEBIAN_ORIG_TARBALL)
+	rm -f $(PACKAGENAME)_*.debian.tar.gz
 	rm -f $(PACKAGENAME)_*.dsc
 	rm -f $(PACKAGENAME)_*_*.changes
 	rm -f $(PACKAGENAME)_*_*.deb

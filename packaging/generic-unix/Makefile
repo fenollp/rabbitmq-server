@@ -25,13 +25,15 @@ all: dist
 	@:
 
 dist:
-	tar -Jxf $(SOURCE_DIST_FILE)
+	xzcat $(SOURCE_DIST_FILE) | tar -xf -
 
+# web-manpages are not used by generic-unix but by `make release` in the.
+# Umbrella. Those manpages are copied to www.rabbitmq.com
 	$(MAKE) -C $(SOURCE_DIR) \
 		PREFIX= RMQ_ROOTDIR= \
 		RMQ_ERLAPP_DIR=`pwd`/$(TARGET_DIR) \
 		MANDIR=`pwd`/$(TARGET_DIR)/share/man \
-		manpages install install-man
+		manpages web-manpages install install-man
 
 	sed -e 's:^SYS_PREFIX=$$:SYS_PREFIX=\$${RABBITMQ_HOME}:' \
         $(TARGET_DIR)/sbin/rabbitmq-defaults >$(TARGET_DIR)/sbin/rabbitmq-defaults.tmp \
@@ -40,15 +42,17 @@ dist:
 
 	mkdir -p $(TARGET_DIR)/etc/rabbitmq
 
-	tar -zcf $(TARGET_TARBALL).tar.gz $(TARGET_DIR)
+	find $(TARGET_DIR) -print0 | LC_COLLATE=C sort -z | \
+	xargs -0 tar --no-recursion -cf - | \
+	xz > $(CURDIR)/$(TARGET_TARBALL).tar.xz
 
 	if test "$(PACKAGES_DIR)"; then \
 		mkdir -p "$(PACKAGES_DIR)"; \
-		mv $(TARGET_TARBALL).tar.gz "$(PACKAGES_DIR)"; \
+		mv $(TARGET_TARBALL).tar.xz "$(PACKAGES_DIR)"; \
 	fi
 
 clean: clean_partial
-	rm -f rabbitmq-server-generic-unix-*.tar.gz
+	rm -f rabbitmq-server-generic-unix-*.tar.xz
 
 clean_partial:
 	rm -rf rabbitmq-server-* rabbitmq_server-*
